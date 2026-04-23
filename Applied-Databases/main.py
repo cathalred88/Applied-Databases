@@ -4,6 +4,7 @@
 # Description: This is the main file for the Applied Databases project. It will contain the main code for the project.
 
 # imports
+import os
 
 # write a main menu for the user to interact with the database
 def main_menu():
@@ -46,6 +47,9 @@ def ViewSpeakersAndSessions():
     # code to view speakers and sessions from stored database
     speaker = input("Enter speaker name: ")
     # ... (code to fetch and display speaker information)
+    
+    # clear the terminal window after displaying the information
+    os.system("cls" if os.name == "nt" else "clear")
     main_menu()
 
 def ViewAttendeesByCompany():
@@ -53,6 +57,9 @@ def ViewAttendeesByCompany():
     # code to view attendees by company
     company = input("Enter company name: ")
     # ... (code to fetch and display attendees for the specified company)
+
+    # clear the terminal window after displaying the information
+    os.system("cls" if os.name == "nt" else "clear")
     main_menu()
 
 def AddNewAttendee():
