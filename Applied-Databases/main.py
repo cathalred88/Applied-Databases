@@ -5,8 +5,22 @@
 
 # imports
 import os
+import pymysql
 
-# write a main menu for the user to interact with the database
+
+# connect to sql database
+def connect_to_database():
+    connection = pymysql.connect(
+        host="localhost",
+        user="your_username",
+        password="your_password",
+        database="your_database"
+    )
+    return connection
+
+
+
+# write a main menu for the user to interact with a sql database
 def main_menu():
     print("Conference Management")
     print("---------------------\n")
@@ -47,9 +61,11 @@ def ViewSpeakersAndSessions():
     # code to view speakers and sessions from stored database
     speaker = input("Enter speaker name: ")
     # ... (code to fetch and display speaker information)
-    
+
     # clear the terminal window after displaying the information
     os.system("cls" if os.name == "nt" else "clear")
+
+    # return to main menu
     main_menu()
 
 def ViewAttendeesByCompany():
@@ -60,27 +76,36 @@ def ViewAttendeesByCompany():
 
     # clear the terminal window after displaying the information
     os.system("cls" if os.name == "nt" else "clear")
+
+    # return to main menu
     main_menu()
 
 def AddNewAttendee():
     print("Add New Attendee")
     # code to add new attendee
+
+    # return to main menu
     main_menu()
 
 def ViewConnectedAttendees():
     print("View Connected Attendees")
     # code to view connected attendees
+
+    # return to main menu
     main_menu()
 
 def AddAttendeeConnection():
     print("Add Attendee Connection")
     # code to add attendee connection
+
+    # return to main menu
     main_menu() 
 
 def ViewRooms():
     print("View Rooms")
     # code to view rooms
 
+    # return to main menu
     main_menu()
 
 
@@ -88,4 +113,4 @@ def ViewRooms():
 if __name__ == "__main__":
     main_menu()
 
-# End of main.py
+# End of main.py code
