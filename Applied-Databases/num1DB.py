@@ -4,8 +4,11 @@
 # The main menu allows users to select these options and interact with the database accordingly.
 
 import pymysql
+import neo4j
+
 
 conn = None
+driver = None
 
 def connect_to_database():
     global conn
@@ -13,8 +16,8 @@ def connect_to_database():
         conn = pymysql.connect(
             host="localhost",
             user="root",
-            password="root",
-            database="school_db"
+            password="",
+            database="appdbproj`"
             cursorclass=pymysql.cursors.DictCursor
         )
         print("Connected to database successfully!")
