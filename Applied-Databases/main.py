@@ -7,17 +7,26 @@
 import os
 import pymysql
 
+conn = None
+driver = None
 
 # connect to sql database
 def connect_to_database():
-    connection = pymysql.connect(
-        host="localhost",
-        user="your_username",
-        password="your_password",
-        database="your_database"
-    )
-    return connection
+    global conn
+    try:
+        conn = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="root",
+            database="appdbproj",
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        print("Connected to database successfully!")
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
 
+
+print("this is working")
 
 
 # write a main menu for the user to interact with a sql database
