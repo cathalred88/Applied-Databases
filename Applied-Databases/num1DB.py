@@ -16,8 +16,8 @@ def connect_to_database():
         conn = pymysql.connect(
             host="localhost",
             user="root",
-            password="",
-            database="appdbproj`"
+            password="root",
+            database="appdbproj",
             cursorclass=pymysql.cursors.DictCursor
         )
         print("Connected to database successfully!")
