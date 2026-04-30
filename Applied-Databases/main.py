@@ -68,7 +68,7 @@ def main_menu():
 # functions for each menu option
 def ViewSpeakersAndSessions():
     print("View Speakers & Sessions\n")
-    speaker = input("Enter speaker name:")
+    speaker = input("Enter speaker name: ")
 
     try:
         with conn.cursor() as cursor:
@@ -79,13 +79,14 @@ def ViewSpeakersAndSessions():
             result = cursor.fetchall()
 
             if result:
-                print(f"Session Details for {speaker}:")
+                print(f"Session Details for {speaker}: ")
                 table_data = [
                     [row["speakerName"], row["sessionTitle"], row["roomID"]]
                     for row in result
                 ]
                 headers = ["Speaker Name", "Session Title", "Room ID"]
-                print(tabulate(table_data, headers=headers, tablefmt="grid"))
+                print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                print("\n")
             else:
                 # if not speaker is found to match the search query, offer to search for another name
                 search_again = input("Speaker not found. Search again? (y/n): ")
@@ -96,6 +97,7 @@ def ViewSpeakersAndSessions():
     except Exception as e:
         print(f"Error fetching speaker: {e}")
 
+# return to main menu after completing
     main_menu()
 
 def ViewAttendeesByCompany():
