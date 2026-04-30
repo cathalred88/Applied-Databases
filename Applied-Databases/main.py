@@ -6,6 +6,7 @@
 # imports
 import os
 import pymysql
+from tabulate import tabulate
 
 conn = None
 driver = None
@@ -66,20 +67,39 @@ def main_menu():
 
 # functions for each menu option
 def ViewSpeakersAndSessions():
-    print("View Speakers & Sessions")
-    # code to view speakers and sessions from stored database
-    speaker = input("Enter speaker name: ")
-    # ... (code to fetch and display speaker information)
+    print("View Speakers & Sessions\n")
+    speaker = input("Enter speaker name:")
 
-    # clear the terminal window after displaying the information
-    os.system("cls" if os.name == "nt" else "clear")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM session WHERE speakerName LIKE %s",
+                (f"%{speaker}%",)
+            )
+            result = cursor.fetchall()
 
-    # return to main menu
+            if result:
+                print(f"Session Details for {speaker}:")
+                table_data = [
+                    [row["speakerName"], row["sessionTitle"], row["roomID"]]
+                    for row in result
+                ]
+                headers = ["Speaker Name", "Session Title", "Room ID"]
+                print(tabulate(table_data, headers=headers, tablefmt="grid"))
+            else:
+                # if not speaker is found to match the search query, offer to search for another name
+                search_again = input("Speaker not found. Search again? (y/n): ")
+                if search_again.lower() == "y":
+                    ViewSpeakersAndSessions()
+                else:
+                    print("Speaker not found.")
+    except Exception as e:
+        print(f"Error fetching speaker: {e}")
+
     main_menu()
 
 def ViewAttendeesByCompany():
     print("View Attendees by Company")
-    # code to view attendees by company
     company = input("Enter company name: ")
     # ... (code to fetch and display attendees for the specified company)
 
@@ -117,9 +137,12 @@ def ViewRooms():
     # return to main menu
     main_menu()
 
-
 # call the main menu function
 if __name__ == "__main__":
-    main_menu()
+    connect_to_database()
+    if conn:
+        main_menu()
+else:
+    pass
 
 # End of main.py code
