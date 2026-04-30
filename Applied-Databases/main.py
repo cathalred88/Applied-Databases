@@ -27,10 +27,7 @@ def connect_to_database():
         print(f"Error connecting to database: {e}")
 
 
-print("this is working")
-
-
-# write a main menu for the user to interact with a sql database
+# main menu for the user to select menu options
 def main_menu():
     print("Conference Management")
     print("---------------------\n")
@@ -59,58 +56,157 @@ def main_menu():
     elif choice == "6":
         ViewRooms()
     elif choice == "X" or choice == "x":
-        print("Goodbye!")
+        print("\n")
+        print("Thank you for using the Conference Management System, Goodbye!")
         exit()
     else:
         print("Invalid choice. Please try again.")
         main_menu()
 
-# functions for each menu option
+## Modules for each menu option
+
+# Module 1: View Speakers and Sessions:
 def ViewSpeakersAndSessions():
     print("View Speakers & Sessions\n")
-    speaker = input("Enter speaker name: ")
 
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT * FROM session WHERE speakerName LIKE %s",
-                (f"%{speaker}%",)
-            )
-            result = cursor.fetchall()
+    while True:
+        speaker = input("Enter speaker name queary: ")
 
-            if result:
-                print(f"Session Details for {speaker}: ")
-                table_data = [
-                    [row["speakerName"], row["sessionTitle"], row["roomID"]]
-                    for row in result
-                ]
-                headers = ["Speaker Name", "Session Title", "Room ID"]
-                print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
-                print("\n")
-            else:
-                # if not speaker is found to match the search query, offer to search for another name
-                search_again = input("Speaker not found. Search again? (y/n): ")
-                if search_again.lower() == "y":
-                    ViewSpeakersAndSessions()
+        try:
+            with conn.cursor() as cursor:
+
+                query = """
+                SELECT 
+                    s.speakerName,
+                    s.sessionTitle,
+                    r.roomName
+                FROM session s
+                JOIN room r ON s.roomID = r.roomID
+                WHERE s.speakerName LIKE %s;
+                """
+
+                cursor.execute(query, (f"%{speaker}%",))
+                result = cursor.fetchall()
+
+                if result:
+                    print(f"\nSession Details for all speakers with names containing '{speaker}':")
+                    print("\n")
+
+                    table_data = [
+                        [
+                            row["speakerName"],
+                            row["sessionTitle"],
+                            row["roomName"]
+                        ]
+                        for row in result
+                    ]
+
+                    headers = ["Speaker Name", "Session Title", "Room"]
+                    print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                    print("\n")
+
+                    break  # Exit loop after success
+
                 else:
-                    print("Speaker not found.")
-    except Exception as e:
-        print(f"Error fetching speaker: {e}")
+                    search_again = input("No Speakers found of that name. Search again? (y/n): ")
+                    if search_again.lower() != "y":
+                        print("Returning to menu...\n")
+                        break
+
+        except Exception as e:
+            print(f"Error fetching speaker: {e}")
+            break
 
 # return to main menu after completing
     main_menu()
 
+
+# Module 2: View Attendees by Company:
 def ViewAttendeesByCompany():
-    print("View Attendees by Company")
-    company = input("Enter company name: ")
-    # ... (code to fetch and display attendees for the specified company)
+    print("View Attendees by Company\n")
 
-    # clear the terminal window after displaying the information
-    os.system("cls" if os.name == "nt" else "clear")
+    while True:  # loop until valid or user exits
+        company = input("Enter company ID: ")
 
+        try:
+            with conn.cursor() as cursor:
+
+                # Step 1 — Check if company exists
+                cursor.execute(
+                    "SELECT companyName, companyID FROM company WHERE companyID = %s",
+                    ({company},)
+                )
+                company_result = cursor.fetchall()
+
+                if not company_result:
+                    retry = input("Company not found. Try again? (y/n): ")
+                    if retry.lower() == "y":
+                        continue
+                    else:
+                        print("Returning to menu...\n")
+                        break
+
+                company_id = company_result[0]["companyID"]
+                company_name = company_result[0]["companyName"]
+
+                # Step 2 — Fetch registrations
+                query = """
+                SELECT 
+                    a.attendeeName,
+                    a.attendeeDOB,
+                    s.sessionTitle,
+                    s.speakerName,
+                    r.roomName
+                FROM attendee a
+                JOIN registration reg ON a.attendeeID = reg.attendeeID
+                JOIN session s ON reg.sessionID = s.sessionID
+                JOIN room r ON s.roomID = r.roomID
+                WHERE a.attendeeCompanyID = %s;
+                """
+
+                cursor.execute(query, (company_id,))
+                result = cursor.fetchall()
+
+                print(f"\nCompany: {company_name}\n")
+
+                if result:
+                    table_data = [
+                        [
+                            row["attendeeName"],
+                            row["attendeeDOB"],
+                            row["sessionTitle"],
+                            row["speakerName"],
+                            row["roomName"]
+                        ]
+                        for row in result
+                    ]
+
+                    headers = [
+                        "Attendee Name",
+                        "DOB",
+                        "Session Title",
+                        "Speaker",
+                        "Room"
+                    ]
+
+                    print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                    print("\n")
+
+                else:
+                    print("This company has no attendees registered for sessions.\n")
+
+                break  # Exit loop after successful lookup
+
+        except Exception as e:
+            print(f"Error fetching Company data: {e}")
+            print("\n")
+            break
+    
     # return to main menu
     main_menu()
 
+
+# Module 3: Add New Attendee
 def AddNewAttendee():
     print("Add New Attendee")
     # code to add new attendee
@@ -118,6 +214,8 @@ def AddNewAttendee():
     # return to main menu
     main_menu()
 
+
+# Module 4: View Connected Attendees
 def ViewConnectedAttendees():
     print("View Connected Attendees")
     # code to view connected attendees
@@ -125,6 +223,8 @@ def ViewConnectedAttendees():
     # return to main menu
     main_menu()
 
+
+# Module 5: Add Attendee Connection
 def AddAttendeeConnection():
     print("Add Attendee Connection")
     # code to add attendee connection
@@ -132,6 +232,8 @@ def AddAttendeeConnection():
     # return to main menu
     main_menu() 
 
+
+# Module 6: View Rooms
 def ViewRooms():
     print("View Rooms")
     # code to view rooms
@@ -139,6 +241,7 @@ def ViewRooms():
     # return to main menu
     main_menu()
 
+## Main Program 
 # call the main menu function
 if __name__ == "__main__":
     connect_to_database()
