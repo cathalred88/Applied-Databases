@@ -212,46 +212,80 @@ def ViewAttendeesByCompany():
 
 # Module 3: Add New Attendee
 def AddNewAttendee():
-    print("\nAdd New Attendee\n")
 
-    try:
+    print("Add New Attendee\n")
+
+    # Validate Attendee ID
+    while True:
+        attendee_ID = input("Enter attendee ID: ").strip()
+
+        if not attendee_ID.isdigit():
+            print("Error: Attendee ID must be a number.\n")
+            continue
+
+        attendee_ID = int(attendee_ID)
+
+        # 🔍 Check for duplicates in database
         with conn.cursor() as cursor:
-
-            # Step 1 Collect Attendee Info
-            attendee_ID = int(input("Enter attendee ID(three digits): "))
-            attendee_name = input("Enter attendee name: ").strip()
-            attendee_dob = input("Enter DOB (YYYY-MM-DD): ").strip()
-            attendee_gender = input("Enter gender (Male/Female): ").strip().title()
-            attendee_company_id = int(input("Enter company ID(One Digit): "))
-
-            # Validate date
-            datetime.strptime(attendee_dob, "%Y-%m-%d")
-
-            if attendee_gender not in ["Male", "Female"]:
-                print("***ERROR*** Gender must be Male or Female.")
-                return
-
-            # Check duplicate ID
             cursor.execute(
                 "SELECT attendeeID FROM attendee WHERE attendeeID = %s",
                 (attendee_ID,)
             )
-            if cursor.fetchone():
-                print(f"***ERROR*** Attendee ID {attendee_ID} already exists.")
-                return
+        if cursor.fetchone():
+            print("Error: Attendee ID already exists. Please enter a different ID.\n")
+            continue
 
-            # Check company exists
+        break
+
+    # Validate Name
+    while True:
+        attendee_name = input("Enter attendee name: ").strip()
+        if attendee_name == "":
+            print("Error: Attendee name cannot be blank.\n")
+        else:
+            break
+
+    # Validate DOB
+    while True:
+        attendee_dob = input("Enter attendee date of birth (YYYY-MM-DD): ").strip()
+        try:
+            datetime.strptime(attendee_dob, "%Y-%m-%d")
+            break
+        except ValueError:
+            print("Error: Date must be in format YYYY-MM-DD.\n")
+
+    # Validate Gender
+    while True:
+        attendee_gender = input("Enter attendee gender (Male/Female): ").strip().capitalize()
+        if attendee_gender in ["Male", "Female"]:
+            break
+        else:
+            print("Error: Gender must be 'Male' or 'Female'.\n")
+
+    # Validate Company ID
+    while True:
+        attendee_company_id = input("Enter attendee company ID: ").strip()
+        if attendee_company_id.isdigit():
+            attendee_company_id = int(attendee_company_id)
+            break
+        else:
+            print("Error: Company ID must be a number.\n")
+
+    try:
+        with conn.cursor() as cursor:
+
+            # Check Company Exists
             cursor.execute(
                 "SELECT companyName FROM company WHERE companyID = %s",
                 (attendee_company_id,)
             )
-            company = cursor.fetchone()
+            company_result = cursor.fetchone()
 
-            if not company:
-                print(f"***ERROR*** Company ID {attendee_company_id} does not exist.")
+            if not company_result:
+                print("Error: Company ID does not exist.\n")
                 return
 
-            # Step 2: Insert Attendee
+            # Insert Attendee
             cursor.execute(
                 """
                 INSERT INTO attendee
@@ -261,69 +295,54 @@ def AddNewAttendee():
                 (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
             )
 
-            print(f"\n***SUCCESS*** Attendee added to {company['companyName']}.")
+            print("\nAttendee added successfully!")
 
-            # Step 3: Ask to Register for a session
-            register_choice = input("Register this attendee for a session? (y/n): ").lower()
+            # Show Available Sessions
+            cursor.execute("SELECT sessionID, sessionTitle FROM session")
+            sessions = cursor.fetchall()
 
-            if register_choice == "y":
+            print("\nAvailable Sessions:")
+            for row in sessions:
+                print(f"{row['sessionID']} - {row['sessionTitle']}")
 
-                # Show available sessions
-                cursor.execute("""
-                    SELECT sessionID, sessionTitle, speakerName, sessionDate
-                    FROM session
-                    ORDER BY sessionDate;
-                """)
-                sessions = cursor.fetchall()
-
-                print("\nAvailable Sessions:\n")
-                for s in sessions:
-                    print(f"{s['sessionID']} - {s['sessionTitle']} ({s['speakerName']}) on {s['sessionDate']}")
-
-                session_id = int(input("\nEnter session ID to register: "))
-
-                # Validate session exists
-                cursor.execute(
-                    "SELECT sessionID FROM session WHERE sessionID = %s",
-                    (session_id,)
-                )
-                if not cursor.fetchone():
-                    print("Invalid session ID.")
-                    conn.rollback()
-                    return
-
-                # Step 4: Insert Registration
-               # Get next registration ID
-                cursor.execute("SELECT MAX(registrationID) FROM registration")
-                max_id = cursor.fetchone()["MAX(registrationID)"]
-
-                if max_id is None:
-                    new_registration_id = 1
+            # Register for Session
+            while True:
+                session_id = input("\nEnter Session ID to register attendee: ").strip()
+                if session_id.isdigit():
+                    session_id = int(session_id)
+                    break
                 else:
-                    new_registration_id = max_id + 1
+                    print("Error: Session ID must be a number.\n")
 
-                # Insert registration
-                cursor.execute(
-                    """
-                    INSERT INTO registration
-                    (registrationID, attendeeID, sessionID, registeredAt)
-                    VALUES (%s, %s, %s, NOW())
-                    """,
-                    (new_registration_id, attendee_ID, session_id)
-                )
+            # Generate Next Registration ID
+            cursor.execute("SELECT MAX(registrationID) FROM registration")
+            max_id = cursor.fetchone()["MAX(registrationID)"]
 
-                print("Attendee successfully registered!")
+            if max_id is None:
+                new_registration_id = 1
+            else:
+                new_registration_id = max_id + 1
 
-            # Step 5: Commit Everything
+            # Insert Registration into database
+            cursor.execute(
+                """
+                INSERT INTO registration
+                (registrationID, attendeeID, sessionID, registeredAt)
+                VALUES (%s, %s, %s, NOW())
+                """,
+                (new_registration_id, attendee_ID, session_id)
+            )
+
             conn.commit()
-            print("\nProcess completed successfully.\n")
+            print("Attendee successfully registered for session!\n")
 
     except Exception as e:
-        conn.rollback()
         print(f"Error: {e}")
 
     # return to main menu
     main_menu()
+
+
 
 
 # Module 4: View Connected Attendees
