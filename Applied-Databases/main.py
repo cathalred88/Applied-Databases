@@ -7,6 +7,7 @@
 import os
 import pymysql
 from tabulate import tabulate
+from datetime import datetime
 
 conn = None
 driver = None
@@ -156,6 +157,7 @@ def ViewAttendeesByCompany():
                     a.attendeeDOB,
                     s.sessionTitle,
                     s.speakerName,
+                    s.sessionDate,
                     r.roomName
                 FROM attendee a
                 JOIN registration reg ON a.attendeeID = reg.attendeeID
@@ -176,6 +178,7 @@ def ViewAttendeesByCompany():
                             row["attendeeDOB"],
                             row["sessionTitle"],
                             row["speakerName"],
+                            row["sessionDate"],
                             row["roomName"]
                         ]
                         for row in result
@@ -186,6 +189,7 @@ def ViewAttendeesByCompany():
                         "DOB",
                         "Session Title",
                         "Speaker",
+                        "Session Date",
                         "Room"
                     ]
 
@@ -208,8 +212,25 @@ def ViewAttendeesByCompany():
 
 # Module 3: Add New Attendee
 def AddNewAttendee():
+
     print("Add New Attendee")
     # code to add new attendee
+    attendee_ID = input("Enter attendee ID: ")
+    attendee_name = input("Enter attendee name: ")
+    attendee_dob = input("Enter attendee date of birth: ")
+    attendee_gender = input("Enter attendee gender: ")
+    attendee_company_id = input("Enter attendee company ID: ")
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO attendee (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID) VALUES (%s, %s, %s, %s, %s)",
+                (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
+            )
+            conn.commit()
+            print("Attendee added successfully!")
+    except Exception as e:
+        print(f"Error adding attendee: {e}")
 
     # return to main menu
     main_menu()
