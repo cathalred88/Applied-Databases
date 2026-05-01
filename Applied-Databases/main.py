@@ -212,25 +212,71 @@ def ViewAttendeesByCompany():
 
 # Module 3: Add New Attendee
 def AddNewAttendee():
+    print("\nAdd New Attendee\n")
 
-    print("Add New Attendee")
-    # code to add new attendee
-    attendee_ID = input("Enter attendee ID: ")
-    attendee_name = input("Enter attendee name: ")
-    attendee_dob = input("Enter attendee date of birth: ")
-    attendee_gender = input("Enter attendee gender: ")
-    attendee_company_id = input("Enter attendee company ID: ")
+    while True:
+        try:
+            attendee_ID = int(input("Enter attendee ID (three digits): "))
+            attendee_name = input("Enter attendee name: ").strip()
+            attendee_dob = input("Enter attendee date of birth (YYYY-MM-DD): ").strip()
+            attendee_gender = input("Enter attendee gender (Male/Female/Other): ").strip().title()
+            attendee_company_id = int(input("Enter attendee company ID (one digit): "))
 
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO attendee (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID) VALUES (%s, %s, %s, %s, %s)",
-                (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
-            )
-            conn.commit()
-            print("Attendee added successfully!")
-    except Exception as e:
-        print(f"Error adding attendee: {e}")
+            # Validate date format for the date of birth date 
+            try:
+                datetime.strptime(attendee_dob, "%Y-%m-%d")
+            except ValueError:
+                print("Invalid date format. Please use YYYY-MM-DD.\n")
+                continue
+
+            # Validate gender
+            if attendee_gender not in ["Male", "Female", "Other"]:
+                print("Gender must be 'Male', 'Female', or 'Other'.\n")
+                continue
+
+            with conn.cursor() as cursor:
+
+                # Check if attendee ID already exists
+                cursor.execute(
+                    "SELECT attendeeID FROM attendee WHERE attendeeID = %s",
+                    (attendee_ID,)
+                )
+                if cursor.fetchone():
+                    print("Attendee ID already exists.\n")
+                    continue
+
+                # Check if company exists
+                cursor.execute(
+                    "SELECT companyName FROM company WHERE companyID = %s",
+                    (attendee_company_id,)
+                )
+                company = cursor.fetchone()
+
+                if not company:
+                    print("Company ID does not exist.\n")
+                    continue
+
+                # Insert attendee details into tables
+                cursor.execute(
+                    """
+                    INSERT INTO attendee 
+                    (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
+                )
+
+                conn.commit()
+
+                print(f"\nAttendee added successfully to company: {company['companyName']}!\n")
+                break
+
+        except ValueError:
+            print("Invalid numeric input. Please try again.\n")
+
+        except Exception as e:
+            print(f"Error adding attendee: {e}")
+            break
 
     # return to main menu
     main_menu()
