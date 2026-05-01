@@ -214,69 +214,113 @@ def ViewAttendeesByCompany():
 def AddNewAttendee():
     print("\nAdd New Attendee\n")
 
-    while True:
-        try:
-            attendee_ID = int(input("Enter attendee ID (three digits): "))
+    try:
+        with conn.cursor() as cursor:
+
+            # Step 1 Collect Attendee Info
+            attendee_ID = int(input("Enter attendee ID(three digits): "))
             attendee_name = input("Enter attendee name: ").strip()
-            attendee_dob = input("Enter attendee date of birth (YYYY-MM-DD): ").strip()
-            attendee_gender = input("Enter attendee gender (Male/Female/Other): ").strip().title()
-            attendee_company_id = int(input("Enter attendee company ID (one digit): "))
+            attendee_dob = input("Enter DOB (YYYY-MM-DD): ").strip()
+            attendee_gender = input("Enter gender (Male/Female): ").strip().title()
+            attendee_company_id = int(input("Enter company ID(One Digit): "))
 
-            # Validate date format for the date of birth date 
-            try:
-                datetime.strptime(attendee_dob, "%Y-%m-%d")
-            except ValueError:
-                print("Invalid date format. Please use YYYY-MM-DD.\n")
-                continue
+            # Validate date
+            datetime.strptime(attendee_dob, "%Y-%m-%d")
 
-            # Validate gender
-            if attendee_gender not in ["Male", "Female", "Other"]:
-                print("Gender must be 'Male', 'Female', or 'Other'.\n")
-                continue
+            if attendee_gender not in ["Male", "Female"]:
+                print("***ERROR*** Gender must be Male or Female.")
+                return
 
-            with conn.cursor() as cursor:
+            # Check duplicate ID
+            cursor.execute(
+                "SELECT attendeeID FROM attendee WHERE attendeeID = %s",
+                (attendee_ID,)
+            )
+            if cursor.fetchone():
+                print(f"***ERROR*** Attendee ID {attendee_ID} already exists.")
+                return
 
-                # Check if attendee ID already exists
+            # Check company exists
+            cursor.execute(
+                "SELECT companyName FROM company WHERE companyID = %s",
+                (attendee_company_id,)
+            )
+            company = cursor.fetchone()
+
+            if not company:
+                print(f"***ERROR*** Company ID {attendee_company_id} does not exist.")
+                return
+
+            # Step 2: Insert Attendee
+            cursor.execute(
+                """
+                INSERT INTO attendee
+                (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
+            )
+
+            print(f"\n***SUCCESS*** Attendee added to {company['companyName']}.")
+
+            # Step 3: Ask to Register for a session
+            register_choice = input("Register this attendee for a session? (y/n): ").lower()
+
+            if register_choice == "y":
+
+                # Show available sessions
+                cursor.execute("""
+                    SELECT sessionID, sessionTitle, speakerName, sessionDate
+                    FROM session
+                    ORDER BY sessionDate;
+                """)
+                sessions = cursor.fetchall()
+
+                print("\nAvailable Sessions:\n")
+                for s in sessions:
+                    print(f"{s['sessionID']} - {s['sessionTitle']} ({s['speakerName']}) on {s['sessionDate']}")
+
+                session_id = int(input("\nEnter session ID to register: "))
+
+                # Validate session exists
                 cursor.execute(
-                    "SELECT attendeeID FROM attendee WHERE attendeeID = %s",
-                    (attendee_ID,)
+                    "SELECT sessionID FROM session WHERE sessionID = %s",
+                    (session_id,)
                 )
-                if cursor.fetchone():
-                    print("Attendee ID already exists.\n")
-                    continue
+                if not cursor.fetchone():
+                    print("Invalid session ID.")
+                    conn.rollback()
+                    return
 
-                # Check if company exists
-                cursor.execute(
-                    "SELECT companyName FROM company WHERE companyID = %s",
-                    (attendee_company_id,)
-                )
-                company = cursor.fetchone()
+                # Step 4: Insert Registration
+               # Get next registration ID
+                cursor.execute("SELECT MAX(registrationID) FROM registration")
+                max_id = cursor.fetchone()["MAX(registrationID)"]
 
-                if not company:
-                    print("Company ID does not exist.\n")
-                    continue
+                if max_id is None:
+                    new_registration_id = 1
+                else:
+                    new_registration_id = max_id + 1
 
-                # Insert attendee details into tables
+                # Insert registration
                 cursor.execute(
                     """
-                    INSERT INTO attendee 
-                    (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO registration
+                    (registrationID, attendeeID, sessionID, registeredAt)
+                    VALUES (%s, %s, %s, NOW())
                     """,
-                    (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
+                    (new_registration_id, attendee_ID, session_id)
                 )
 
-                conn.commit()
+                print("Attendee successfully registered!")
 
-                print(f"\nAttendee added successfully to company: {company['companyName']}!\n")
-                break
+            # Step 5: Commit Everything
+            conn.commit()
+            print("\nProcess completed successfully.\n")
 
-        except ValueError:
-            print("Invalid numeric input. Please try again.\n")
-
-        except Exception as e:
-            print(f"Error adding attendee: {e}")
-            break
+    except Exception as e:
+        conn.rollback()
+        print(f"Error: {e}")
 
     # return to main menu
     main_menu()
