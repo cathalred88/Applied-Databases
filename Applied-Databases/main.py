@@ -350,6 +350,7 @@ def AddNewAttendee():
 
 
 # Module 4: View Connected Attendees
+
 def ViewConnectedAttendees():
     driver = GraphDatabase.driver(
     "bolt://localhost:7687",
@@ -361,7 +362,20 @@ def ViewConnectedAttendees():
     try:
         with conn.cursor() as cursor:
 
-            # 1️⃣ Neo4j query
+            # 1️⃣ Get selected attendee name (MySQL)
+            cursor.execute(
+                "SELECT attendeeName FROM attendee WHERE attendeeID = %s",
+                (attendeeID,)
+            )
+            attendee = cursor.fetchone()
+
+            if not attendee:
+                print("***ERROR*** Attendee does not exist.")
+                return
+
+            selected_name = attendee["attendeeName"]
+
+            # 2️⃣ Get connected IDs (Neo4j)
             neo4j_query = """
             MATCH (a:Attendee)-[:CONNECTED_TO]->(b:Attendee)
             WHERE a.AttendeeID = $attendeeID
@@ -372,11 +386,12 @@ def ViewConnectedAttendees():
                 result = session.run(neo4j_query, attendeeID=attendeeID)
                 connected_ids = [r["ConnectedAttendeeID"] for r in result]
 
+            # Output if no connections
             if not connected_ids:
-                print("No connected attendees found for this ID.")
+                print(f"\n{selected_name} has no connections.")
                 return
 
-            # 2️⃣ MySQL lookup for names
+            #  Get connected names (MySQL)
             format_strings = ','.join(['%s'] * len(connected_ids))
 
             cursor.execute(
@@ -388,16 +403,15 @@ def ViewConnectedAttendees():
                 tuple(connected_ids)
             )
 
-            mysql_result = cursor.fetchall()
+            connected_attendees = cursor.fetchall()
 
-            # 3️⃣ Output
-            
-            print(f"Attendee Name: {attendeeName}")
-            print("--------------------------------")
-            print("\nConnected Attendees:\n")
+            # Display results
+            print("\nConnected Attendees:")
+            print(f"Selected Attendee: {selected_name} (ID: {attendeeID})\n")
 
-            for row in mysql_result:
+            for row in connected_attendees:
                 print(f"ID: {row['attendeeID']} | Name: {row['attendeeName']}")
+            print("\n")
 
     except Exception as e:
         print(f"Error fetching connected attendees: {e}")
