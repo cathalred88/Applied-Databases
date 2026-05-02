@@ -347,10 +347,7 @@ def AddNewAttendee():
     main_menu()
 
 
-
-
 # Module 4: View Connected Attendees
-
 def ViewConnectedAttendees():
     driver = GraphDatabase.driver(
     "bolt://localhost:7687",
@@ -370,6 +367,7 @@ def ViewConnectedAttendees():
     try:
         with conn.cursor() as cursor:
 
+            # 1️⃣ Get selected attendee name (MySQL)
             # retrieve selected attendee name from the MySQL database
             cursor.execute(
                 "SELECT attendeeName FROM attendee WHERE attendeeID = %s",
@@ -383,6 +381,7 @@ def ViewConnectedAttendees():
 
             selected_name = attendee["attendeeName"]
 
+            # 2️⃣ Get connected IDs (Neo4j)
             # Get connected IDs from the Neo4j database
             neo4j_query = """
             MATCH (a:Attendee)-[:CONNECTED_TO]->(b:Attendee)
@@ -394,11 +393,13 @@ def ViewConnectedAttendees():
                 result = session.run(neo4j_query, attendeeID=attendeeID)
                 connected_ids = [r["ConnectedAttendeeID"] for r in result]
 
+            # Output if no connections
             # Output if no connections found in Neo4j
             if not connected_ids:
                 print(f"\n{selected_name} has no connections.")
                 return
 
+            #  Get connected names (MySQL)
             # Get connected names (MySQL)
             format_strings = ','.join(['%s'] * len(connected_ids))
 
@@ -430,8 +431,91 @@ def ViewConnectedAttendees():
 
 # Module 5: Add Attendee Connection
 def AddAttendeeConnection():
-    print("Add Attendee Connection")
-    # code to add attendee connection
+
+    def get_valid_attendee_id(prompt):
+        while True:
+            user_input = input(prompt).strip()
+
+            if user_input.isdigit() and int(user_input) > 0:
+                return int(user_input)
+            else:
+                print("***Error*** Please enter a positive integer only.\n")
+
+    attendee1 = get_valid_attendee_id("Enter First Attendee ID: ")
+    attendee2 = get_valid_attendee_id("Enter Second Attendee ID: ")
+
+    if attendee1 == attendee2:
+        print("***Error*** You cannot connect an attendee to themselves.")
+        return
+
+    try:
+        with conn.cursor() as cursor:
+
+            # Retrieve names from MySQL database
+            cursor.execute(
+                """
+                SELECT attendeeID, attendeeName
+                FROM attendee
+                WHERE attendeeID IN (%s, %s)
+                """,
+                (attendee1, attendee2)
+            )
+
+            results = cursor.fetchall()
+
+            if len(results) != 2:
+                print("***Error*** One or both Attendee IDs do not exist in the database.")
+                return
+
+            # Store names
+            attendee_names = {row["attendeeID"]: row["attendeeName"] for row in results}
+
+            name1 = attendee_names[attendee1]
+            name2 = attendee_names[attendee2]
+
+        # Connect to Neo4j
+        driver = GraphDatabase.driver(
+            "bolt://localhost:7687",
+            auth=("neo4j", "neo4jneo4j")
+        )
+
+        with driver.session(database="appdbprojdb") as session:
+
+            # Check if relationship exists
+            check_query = """
+            MATCH (a:Attendee {AttendeeID: $id1})
+                  -[r:CONNECTED_TO]-
+                  (b:Attendee {AttendeeID: $id2})
+            RETURN r
+            """
+
+            result = session.run(check_query, id1=attendee1, id2=attendee2)
+
+            if result.single():
+                print(f"***ERROR*** {name1} and {name2} are already connected.")
+                return
+
+            # Create relationship in Neo4j Database
+            create_query = """
+            MATCH (a:Attendee {AttendeeID: $id1})
+            MATCH (b:Attendee {AttendeeID: $id2})
+            MERGE (a)-[r:CONNECTED_TO]->(b)
+            RETURN a, b, r
+            """
+
+        with driver.session() as session:
+            result = session.run(create_query, id1=attendee1, id2=attendee2)
+            record = result.single()
+
+            if record:
+                print(f"\nConnection confirmed between {name1} and {name2}.")
+            else:
+                print("Connection failed — one or both attendees not found in Neo4j.")
+
+        driver.close()
+
+    except Exception as e:
+        print(f"***Error*** Error creating connection: {e}")
 
     # return to main menu
     main_menu() 
