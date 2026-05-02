@@ -5,9 +5,13 @@
 
 # imports
 import os
+from altair import URI
+from hyperlink import URL
 import pymysql
 from tabulate import tabulate
 from datetime import datetime
+from neo4j import GraphDatabase
+
 
 conn = None
 driver = None
@@ -225,7 +229,7 @@ def AddNewAttendee():
 
         attendee_ID = int(attendee_ID)
 
-        # 🔍 Check for duplicates in database
+        # Check for duplicates in database
         with conn.cursor() as cursor:
             cursor.execute(
                 "SELECT attendeeID FROM attendee WHERE attendeeID = %s",
@@ -348,7 +352,19 @@ def AddNewAttendee():
 # Module 4: View Connected Attendees
 def ViewConnectedAttendees():
     print("View Connected Attendees")
-    # code to view connected attendees
+    # code to view connected attendees from the neo4j database
+
+    URI = "bolt://localhost:7687"
+    USERNAME = "neo4j"
+    PASSWORD = "neo4jneo4j"
+
+    driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
+
+    with driver.session() as session:
+        result = session.run("RETURN 'Connected to Aura!' AS msg")
+        print(result.single()["msg"])
+
+    driver.close()
 
     # return to main menu
     main_menu()
