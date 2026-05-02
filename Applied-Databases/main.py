@@ -351,24 +351,56 @@ def AddNewAttendee():
 
 # Module 4: View Connected Attendees
 def ViewConnectedAttendees():
-    print("View Connected Attendees")
-    # code to view connected attendees from the neo4j database
+    driver = GraphDatabase.driver(
+    "bolt://localhost:7687",
+    auth=("neo4j", "neo4jneo4j")
+    )
 
-    URI = "bolt://localhost:7687"
-    USERNAME = "neo4j"
-    PASSWORD = "neo4jneo4j"
+    attendeeID = int(input("Enter Attendee ID: "))
 
-    driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
+    try:
+        with conn.cursor() as cursor:
 
-    with driver.session() as session:
-        result = session.run("RETURN 'Connected to Aura!' AS msg")
-        print(result.single()["msg"])
+            # 1️⃣ Neo4j query
+            neo4j_query = """
+            MATCH (a:Attendee)-[:CONNECTED_TO]->(b:Attendee)
+            WHERE a.AttendeeID = $attendeeID
+            RETURN b.AttendeeID AS ConnectedAttendeeID
+            """
 
-        # enter attendee ID to search for the neo4j database connections 
-        attendee_id = input("Enter Attendee ID: ").strip()
-        
+            with driver.session() as session:
+                result = session.run(neo4j_query, attendeeID=attendeeID)
+                connected_ids = [r["ConnectedAttendeeID"] for r in result]
 
-    driver.close()
+            if not connected_ids:
+                print("No connected attendees found for this ID.")
+                return
+
+            # 2️⃣ MySQL lookup for names
+            format_strings = ','.join(['%s'] * len(connected_ids))
+
+            cursor.execute(
+                f"""
+                SELECT attendeeID, attendeeName
+                FROM attendee
+                WHERE attendeeID IN ({format_strings})
+                """,
+                tuple(connected_ids)
+            )
+
+            mysql_result = cursor.fetchall()
+
+            # 3️⃣ Output
+            
+            print(f"Attendee Name: {attendeeName}")
+            print("--------------------------------")
+            print("\nConnected Attendees:\n")
+
+            for row in mysql_result:
+                print(f"ID: {row['attendeeID']} | Name: {row['attendeeName']}")
+
+    except Exception as e:
+        print(f"Error fetching connected attendees: {e}")
 
     # return to main menu
     main_menu()
