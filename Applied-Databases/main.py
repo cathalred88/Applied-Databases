@@ -364,6 +364,10 @@ def ViewConnectedAttendees():
         result = session.run("RETURN 'Connected to Aura!' AS msg")
         print(result.single()["msg"])
 
+        # enter attendee ID to search for the neo4j database connections 
+        attendee_id = input("Enter Attendee ID: ").strip()
+        
+
     driver.close()
 
     # return to main menu
