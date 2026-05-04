@@ -523,41 +523,67 @@ def AddAttendeeConnection():
 
 # Module 6: View Rooms
 def ViewRooms():
-    print("View Rooms\n")
+    print("View Rooms, Sessions & Occupancy\n")
 
     try:
         with conn.cursor() as cursor:
 
             query = """
-            SELECT roomID, roomName, capacity
-            FROM room
-            ORDER BY roomID
+            SELECT 
+                r.roomID,
+                r.roomName,
+                r.capacity,
+                s.sessionTitle,
+                s.sessionDate,
+                COUNT(reg.registrationID) AS registeredCount,
+                ROUND(
+                    (COUNT(reg.registrationID) / r.capacity) * 100,
+                    1
+                ) AS occupancyPercent
+            FROM room r
+            LEFT JOIN session s ON r.roomID = s.roomID
+            LEFT JOIN registration reg ON s.sessionID = reg.sessionID
+            GROUP BY r.roomID, s.sessionID
+            ORDER BY r.roomID, s.sessionDate
             """
 
             cursor.execute(query)
             result = cursor.fetchall()
 
             if result:
-                print("\nRoom Details:\n")
+                print("\nRoom Session Details:\n")
 
-                table_data = [
-                    [
+                table_data = []
+
+                for row in result:
+                    table_data.append([
                         row["roomID"],
                         row["roomName"],
-                        row["capacity"]
-                    ]
-                    for row in result
+                        row["sessionTitle"] if row["sessionTitle"] else "No Session",
+                        row["sessionDate"] if row["sessionDate"] else "-",
+                        row["registeredCount"],
+                        row["capacity"],
+                        f"{row['occupancyPercent'] if row['occupancyPercent'] else 0}%"
+                    ])
+
+                headers = [
+                    "Room ID",
+                    "Room Name",
+                    "Session Title",
+                    "Session Date",
+                    "Registered",
+                    "Capacity",
+                    "Occupancy %"
                 ]
 
-                headers = ["Room ID", "Room Name", "Capacity"]
                 print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
                 print("\n")
 
             else:
-                print("No rooms found.\n")
+                print("No room/session data found.\n")
 
     except Exception as e:
-        print(f"***ERROR*** Error fetching rooms: {e}")
+        print(f"***ERROR*** Error fetching room data: {e}")
 
     main_menu()
 
