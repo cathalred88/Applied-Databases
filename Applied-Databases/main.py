@@ -523,10 +523,42 @@ def AddAttendeeConnection():
 
 # Module 6: View Rooms
 def ViewRooms():
-    print("View Rooms")
-    # code to view rooms
+    print("View Rooms\n")
 
-    # return to main menu
+    try:
+        with conn.cursor() as cursor:
+
+            query = """
+            SELECT roomID, roomName, capacity
+            FROM room
+            ORDER BY roomID
+            """
+
+            cursor.execute(query)
+            result = cursor.fetchall()
+
+            if result:
+                print("\nRoom Details:\n")
+
+                table_data = [
+                    [
+                        row["roomID"],
+                        row["roomName"],
+                        row["capacity"]
+                    ]
+                    for row in result
+                ]
+
+                headers = ["Room ID", "Room Name", "Capacity"]
+                print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                print("\n")
+
+            else:
+                print("No rooms found.\n")
+
+    except Exception as e:
+        print(f"***ERROR*** Error fetching rooms: {e}")
+
     main_menu()
 
 ## Main Program 
