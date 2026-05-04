@@ -4,9 +4,9 @@
 # Description: This is the main file for the Applied Databases project. It will contain the main code for the project.
 
 # imports
-import os
-from altair import URI
-from hyperlink import URL
+# import os
+# from altair import URI
+# from hyperlink import URL
 import pymysql
 from tabulate import tabulate
 from datetime import datetime
@@ -354,7 +354,7 @@ def ViewConnectedAttendees():
     auth=("neo4j", "neo4jneo4j")
     )
 
-     # Validate Attendee ID input
+    # Validate Attendee ID input
     while True:
         attendee_input = input("Enter Attendee ID: ").strip()
 
@@ -363,11 +363,10 @@ def ViewConnectedAttendees():
             break
         else:
             print("*** ERROR *** Please enter a valid numeric Attendee ID - Positive integers only.\n")
-
+    
     try:
         with conn.cursor() as cursor:
 
-            # 1️⃣ Get selected attendee name (MySQL)
             # retrieve selected attendee name from the MySQL database
             cursor.execute(
                 "SELECT attendeeName FROM attendee WHERE attendeeID = %s",
@@ -381,7 +380,6 @@ def ViewConnectedAttendees():
 
             selected_name = attendee["attendeeName"]
 
-            # 2️⃣ Get connected IDs (Neo4j)
             # Get connected IDs from the Neo4j database
             neo4j_query = """
             MATCH (a:Attendee)-[:CONNECTED_TO]->(b:Attendee)
@@ -393,13 +391,11 @@ def ViewConnectedAttendees():
                 result = session.run(neo4j_query, attendeeID=attendeeID)
                 connected_ids = [r["ConnectedAttendeeID"] for r in result]
 
-            # Output if no connections
             # Output if no connections found in Neo4j
             if not connected_ids:
                 print(f"\n{selected_name} has no connections.")
                 return
 
-            #  Get connected names (MySQL)
             # Get connected names (MySQL)
             format_strings = ','.join(['%s'] * len(connected_ids))
 
