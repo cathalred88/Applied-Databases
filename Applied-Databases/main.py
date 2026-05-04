@@ -5,22 +5,34 @@
 
 # imports
 import os
+from altair import URI
+from hyperlink import URL
 import pymysql
+from tabulate import tabulate
+from datetime import datetime
+from neo4j import GraphDatabase
 
+
+conn = None
+driver = None
 
 # connect to sql database
 def connect_to_database():
-    connection = pymysql.connect(
-        host="localhost",
-        user="your_username",
-        password="your_password",
-        database="your_database"
-    )
-    return connection
+    global conn
+    try:
+        conn = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="root",
+            database="appdbproj",
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        print("Connected to database successfully!")
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
 
 
-
-# write a main menu for the user to interact with a sql database
+# main menu for the user to select menu options
 def main_menu():
     print("Conference Management")
     print("---------------------\n")
@@ -49,68 +61,539 @@ def main_menu():
     elif choice == "6":
         ViewRooms()
     elif choice == "X" or choice == "x":
-        print("Goodbye!")
+        print("\n")
+        print("Thank you for using the Conference Management System, Goodbye!")
         exit()
     else:
         print("Invalid choice. Please try again.")
         main_menu()
 
-# functions for each menu option
+## Modules for each menu option
+
+# Module 1: View Speakers and Sessions:
 def ViewSpeakersAndSessions():
-    print("View Speakers & Sessions")
-    # code to view speakers and sessions from stored database
-    speaker = input("Enter speaker name: ")
-    # ... (code to fetch and display speaker information)
+    print("View Speakers & Sessions\n")
 
-    # clear the terminal window after displaying the information
-    os.system("cls" if os.name == "nt" else "clear")
+    while True:
+        speaker = input("Enter speaker name queary: ")
 
-    # return to main menu
+        try:
+            with conn.cursor() as cursor:
+
+                query = """
+                SELECT 
+                    s.speakerName,
+                    s.sessionTitle,
+                    r.roomName
+                FROM session s
+                JOIN room r ON s.roomID = r.roomID
+                WHERE s.speakerName LIKE %s;
+                """
+
+                cursor.execute(query, (f"%{speaker}%",))
+                result = cursor.fetchall()
+
+                if result:
+                    print(f"\nSession Details for all speakers with names containing '{speaker}':")
+                    print("\n")
+
+                    table_data = [
+                        [
+                            row["speakerName"],
+                            row["sessionTitle"],
+                            row["roomName"]
+                        ]
+                        for row in result
+                    ]
+
+                    headers = ["Speaker Name", "Session Title", "Room"]
+                    print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                    print("\n")
+
+                    break  # Exit loop after success
+
+                else:
+                    search_again = input("No Speakers found of that name. Search again? (y/n): ")
+                    if search_again.lower() != "y":
+                        print("Returning to menu...\n")
+                        break
+
+        except Exception as e:
+            print(f"Error fetching speaker: {e}")
+            break
+
+# return to main menu after completing
     main_menu()
 
+
+# Module 2: View Attendees by Company:
 def ViewAttendeesByCompany():
-    print("View Attendees by Company")
-    # code to view attendees by company
-    company = input("Enter company name: ")
-    # ... (code to fetch and display attendees for the specified company)
+    print("View Attendees by Company\n")
 
-    # clear the terminal window after displaying the information
-    os.system("cls" if os.name == "nt" else "clear")
+    while True:  # loop until valid or user exits
+        company = input("Enter company ID: ")
 
+        try:
+            with conn.cursor() as cursor:
+
+                # Step 1 — Check if company exists
+                cursor.execute(
+                    "SELECT companyName, companyID FROM company WHERE companyID = %s",
+                    ({company},)
+                )
+                company_result = cursor.fetchall()
+
+                if not company_result:
+                    retry = input("Company not found. Try again? (y/n): ")
+                    if retry.lower() == "y":
+                        continue
+                    else:
+                        print("Returning to menu...\n")
+                        break
+
+                company_id = company_result[0]["companyID"]
+                company_name = company_result[0]["companyName"]
+
+                # Step 2 — Fetch registrations
+                query = """
+                SELECT 
+                    a.attendeeName,
+                    a.attendeeDOB,
+                    s.sessionTitle,
+                    s.speakerName,
+                    s.sessionDate,
+                    r.roomName
+                FROM attendee a
+                JOIN registration reg ON a.attendeeID = reg.attendeeID
+                JOIN session s ON reg.sessionID = s.sessionID
+                JOIN room r ON s.roomID = r.roomID
+                WHERE a.attendeeCompanyID = %s;
+                """
+
+                cursor.execute(query, (company_id,))
+                result = cursor.fetchall()
+
+                print(f"\nCompany: {company_name}\n")
+
+                if result:
+                    table_data = [
+                        [
+                            row["attendeeName"],
+                            row["attendeeDOB"],
+                            row["sessionTitle"],
+                            row["speakerName"],
+                            row["sessionDate"],
+                            row["roomName"]
+                        ]
+                        for row in result
+                    ]
+
+                    headers = [
+                        "Attendee Name",
+                        "DOB",
+                        "Session Title",
+                        "Speaker",
+                        "Session Date",
+                        "Room"
+                    ]
+
+                    print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                    print("\n")
+
+                else:
+                    print("This company has no attendees registered for sessions.\n")
+
+                break  # Exit loop after successful lookup
+
+        except Exception as e:
+            print(f"Error fetching Company data: {e}")
+            print("\n")
+            break
+    
     # return to main menu
     main_menu()
 
+
+# Module 3: Add New Attendee
 def AddNewAttendee():
-    print("Add New Attendee")
-    # code to add new attendee
+
+    print("Add New Attendee\n")
+
+    # Validate Attendee ID
+    while True:
+        attendee_ID = input("Enter attendee ID: ").strip()
+
+        if not attendee_ID.isdigit():
+            print("Error: Attendee ID must be a number.\n")
+            continue
+
+        attendee_ID = int(attendee_ID)
+
+        # Check for duplicates in database
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT attendeeID FROM attendee WHERE attendeeID = %s",
+                (attendee_ID,)
+            )
+        if cursor.fetchone():
+            print("Error: Attendee ID already exists. Please enter a different ID.\n")
+            continue
+
+        break
+
+    # Validate Name
+    while True:
+        attendee_name = input("Enter attendee name: ").strip()
+        if attendee_name == "":
+            print("Error: Attendee name cannot be blank.\n")
+        else:
+            break
+
+    # Validate DOB
+    while True:
+        attendee_dob = input("Enter attendee date of birth (YYYY-MM-DD): ").strip()
+        try:
+            datetime.strptime(attendee_dob, "%Y-%m-%d")
+            break
+        except ValueError:
+            print("Error: Date must be in format YYYY-MM-DD.\n")
+
+    # Validate Gender
+    while True:
+        attendee_gender = input("Enter attendee gender (Male/Female): ").strip().capitalize()
+        if attendee_gender in ["Male", "Female"]:
+            break
+        else:
+            print("Error: Gender must be 'Male' or 'Female'.\n")
+
+    # Validate Company ID
+    while True:
+        attendee_company_id = input("Enter attendee company ID: ").strip()
+        if attendee_company_id.isdigit():
+            attendee_company_id = int(attendee_company_id)
+            break
+        else:
+            print("Error: Company ID must be a number.\n")
+
+    try:
+        with conn.cursor() as cursor:
+
+            # Check Company Exists
+            cursor.execute(
+                "SELECT companyName FROM company WHERE companyID = %s",
+                (attendee_company_id,)
+            )
+            company_result = cursor.fetchone()
+
+            if not company_result:
+                print("Error: Company ID does not exist.\n")
+                return
+
+            # Insert Attendee
+            cursor.execute(
+                """
+                INSERT INTO attendee
+                (attendeeID, attendeeName, attendeeDOB, attendeeGender, attendeeCompanyID)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (attendee_ID, attendee_name, attendee_dob, attendee_gender, attendee_company_id)
+            )
+
+            print("\nAttendee added successfully!")
+
+            # Show Available Sessions
+            cursor.execute("SELECT sessionID, sessionTitle FROM session")
+            sessions = cursor.fetchall()
+
+            print("\nAvailable Sessions:")
+            for row in sessions:
+                print(f"{row['sessionID']} - {row['sessionTitle']}")
+
+            # Register for Session
+            while True:
+                session_id = input("\nEnter Session ID to register attendee: ").strip()
+                if session_id.isdigit():
+                    session_id = int(session_id)
+                    break
+                else:
+                    print("Error: Session ID must be a number.\n")
+
+            # Generate Next Registration ID
+            cursor.execute("SELECT MAX(registrationID) FROM registration")
+            max_id = cursor.fetchone()["MAX(registrationID)"]
+
+            if max_id is None:
+                new_registration_id = 1
+            else:
+                new_registration_id = max_id + 1
+
+            # Insert Registration into database
+            cursor.execute(
+                """
+                INSERT INTO registration
+                (registrationID, attendeeID, sessionID, registeredAt)
+                VALUES (%s, %s, %s, NOW())
+                """,
+                (new_registration_id, attendee_ID, session_id)
+            )
+
+            conn.commit()
+            print("Attendee successfully registered for session!\n")
+
+    except Exception as e:
+        print(f"Error: {e}")
 
     # return to main menu
     main_menu()
 
+
+# Module 4: View Connected Attendees
 def ViewConnectedAttendees():
-    print("View Connected Attendees")
-    # code to view connected attendees
+    driver = GraphDatabase.driver(
+    "bolt://localhost:7687",
+    auth=("neo4j", "neo4jneo4j")
+    )
+
+     # Validate Attendee ID input
+    while True:
+        attendee_input = input("Enter Attendee ID: ").strip()
+
+        if attendee_input.isdigit():
+            attendeeID = int(attendee_input)
+            break
+        else:
+            print("*** ERROR *** Please enter a valid numeric Attendee ID - Positive integers only.\n")
+
+    try:
+        with conn.cursor() as cursor:
+
+            # 1️⃣ Get selected attendee name (MySQL)
+            # retrieve selected attendee name from the MySQL database
+            cursor.execute(
+                "SELECT attendeeName FROM attendee WHERE attendeeID = %s",
+                (attendeeID,)
+            )
+            attendee = cursor.fetchone()
+
+            if not attendee:
+                print("***ERROR*** Attendee does not exist.")
+                return
+
+            selected_name = attendee["attendeeName"]
+
+            # 2️⃣ Get connected IDs (Neo4j)
+            # Get connected IDs from the Neo4j database
+            neo4j_query = """
+            MATCH (a:Attendee)-[:CONNECTED_TO]->(b:Attendee)
+            WHERE a.AttendeeID = $attendeeID
+            RETURN b.AttendeeID AS ConnectedAttendeeID
+            """
+
+            with driver.session() as session:
+                result = session.run(neo4j_query, attendeeID=attendeeID)
+                connected_ids = [r["ConnectedAttendeeID"] for r in result]
+
+            # Output if no connections
+            # Output if no connections found in Neo4j
+            if not connected_ids:
+                print(f"\n{selected_name} has no connections.")
+                return
+
+            #  Get connected names (MySQL)
+            # Get connected names (MySQL)
+            format_strings = ','.join(['%s'] * len(connected_ids))
+
+            cursor.execute(
+                f"""
+                SELECT attendeeID, attendeeName
+                FROM attendee
+                WHERE attendeeID IN ({format_strings})
+                """,
+                tuple(connected_ids)
+            )
+
+            connected_attendees = cursor.fetchall()
+
+            # Display results
+            print("\nConnected Attendees:")
+            print(f"Selected Attendee: {selected_name} (ID: {attendeeID})\n")
+
+            for row in connected_attendees:
+                print(f"ID: {row['attendeeID']} | Name: {row['attendeeName']}")
+            print("\n")
+
+    except Exception as e:
+        print(f"Error fetching connected attendees: {e}")
 
     # return to main menu
     main_menu()
 
+
+# Module 5: Add Attendee Connection
 def AddAttendeeConnection():
-    print("Add Attendee Connection")
-    # code to add attendee connection
+
+    def get_valid_attendee_id(prompt):
+        while True:
+            user_input = input(prompt).strip()
+
+            if user_input.isdigit() and int(user_input) > 0:
+                return int(user_input)
+            else:
+                print("***Error*** Please enter a positive integer only.\n")
+
+    attendee1 = get_valid_attendee_id("Enter First Attendee ID: ")
+    attendee2 = get_valid_attendee_id("Enter Second Attendee ID: ")
+
+    if attendee1 == attendee2:
+        print("***Error*** You cannot connect an attendee to themselves.")
+        return
+
+    try:
+        with conn.cursor() as cursor:
+
+            # Retrieve names from MySQL database
+            cursor.execute(
+                """
+                SELECT attendeeID, attendeeName
+                FROM attendee
+                WHERE attendeeID IN (%s, %s)
+                """,
+                (attendee1, attendee2)
+            )
+
+            results = cursor.fetchall()
+
+            if len(results) != 2:
+                print("***Error*** One or both Attendee IDs do not exist in the database.")
+                return
+
+            # Store names
+            attendee_names = {row["attendeeID"]: row["attendeeName"] for row in results}
+
+            name1 = attendee_names[attendee1]
+            name2 = attendee_names[attendee2]
+
+        # Connect to Neo4j
+        driver = GraphDatabase.driver(
+            "bolt://localhost:7687",
+            auth=("neo4j", "neo4jneo4j")
+        )
+
+        with driver.session(database="appdbprojdb") as session:
+
+            # Check if relationship exists
+            check_query = """
+            MATCH (a:Attendee {AttendeeID: $id1})
+                  -[r:CONNECTED_TO]-
+                  (b:Attendee {AttendeeID: $id2})
+            RETURN r
+            """
+
+            result = session.run(check_query, id1=attendee1, id2=attendee2)
+
+            if result.single():
+                print(f"***ERROR*** {name1} and {name2} are already connected.")
+                return
+
+            # Create relationship in Neo4j Database
+            create_query = """
+            MATCH (a:Attendee {AttendeeID: $id1})
+            MATCH (b:Attendee {AttendeeID: $id2})
+            MERGE (a)-[r:CONNECTED_TO]->(b)
+            RETURN a, b, r
+            """
+
+        with driver.session() as session:
+            result = session.run(create_query, id1=attendee1, id2=attendee2)
+            record = result.single()
+
+            if record:
+                print(f"\nConnection confirmed between {name1} and {name2}.")
+            else:
+                print("Connection failed — one or both attendees not found in Neo4j.")
+
+        driver.close()
+
+    except Exception as e:
+        print(f"***Error*** Error creating connection: {e}")
 
     # return to main menu
     main_menu() 
 
-def ViewRooms():
-    print("View Rooms")
-    # code to view rooms
 
-    # return to main menu
+# Module 6: View Rooms
+def ViewRooms():
+    print("View Rooms, Sessions & Occupancy\n")
+
+    try:
+        with conn.cursor() as cursor:
+
+            query = """
+            SELECT 
+                r.roomID,
+                r.roomName,
+                r.capacity,
+                s.sessionTitle,
+                s.sessionDate,
+                COUNT(reg.registrationID) AS registeredCount,
+                ROUND(
+                    (COUNT(reg.registrationID) / r.capacity) * 100,
+                    1
+                ) AS occupancyPercent
+            FROM room r
+            LEFT JOIN session s ON r.roomID = s.roomID
+            LEFT JOIN registration reg ON s.sessionID = reg.sessionID
+            GROUP BY r.roomID, s.sessionID
+            ORDER BY r.roomID, s.sessionDate
+            """
+
+            cursor.execute(query)
+            result = cursor.fetchall()
+
+            if result:
+                print("\nRoom Session Details:\n")
+
+                table_data = []
+
+                for row in result:
+                    table_data.append([
+                        row["roomID"],
+                        row["roomName"],
+                        row["sessionTitle"] if row["sessionTitle"] else "No Session",
+                        row["sessionDate"] if row["sessionDate"] else "-",
+                        row["registeredCount"],
+                        row["capacity"],
+                        f"{row['occupancyPercent'] if row['occupancyPercent'] else 0}%"
+                    ])
+
+                headers = [
+                    "Room ID",
+                    "Room Name",
+                    "Session Title",
+                    "Session Date",
+                    "Registered",
+                    "Capacity",
+                    "Occupancy %"
+                ]
+
+                print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+                print("\n")
+
+            else:
+                print("No room/session data found.\n")
+
+    except Exception as e:
+        print(f"***ERROR*** Error fetching room data: {e}")
+
     main_menu()
 
-
+## Main Program 
 # call the main menu function
 if __name__ == "__main__":
-    main_menu()
+    connect_to_database()
+    if conn:
+        main_menu()
+else:
+    pass
 
 # End of main.py code
